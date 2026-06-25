@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise ICSS: 3-Phase Separator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* ISA-101 High-Performance Flat UI Palette */
+        :root {
+            --bg-base: #0B0E14;
+            --bg-panel: #151A23;
+            --bg-sub: #1E2532;
+            --border-color: #2D3748;
+            --text-main: #E2E8F0;
+            --text-dim: #94A3B8;
+            --accent-blue: #0284C7;
+            --alarm-red: #DC2626;
+            --alarm-yellow: #D97706;
+            --safe-green: #059669;
+        }
+
+        body { background-color: var(--bg-base); color: var(--text-main); font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; user-select: none; }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+
+        .panel { background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); }
+        .sub-panel { background-color: var(--bg-sub); border: 1px solid var(--border-color); border-radius: 6px; }
+        
+        .alarm-banner { background-color: #7F1D1D; border: 1px solid #EF4444; color: #FECACA; animation: pulse-fast 1s infinite; }
+        .alarm-red { background-color: var(--alarm-red) !important; color: white !important; border-color: #EF4444 !important; animation: pulse-slow 2s infinite; }
+        .alarm-yellow { background-color: var(--alarm-yellow) !important; color: white !important; border-color: #F59E0B !important; animation: pulse-slow 2s infinite; }
+        .safe-green { background-color: var(--safe-green) !important; color: white !important; border-color: #10B981 !important; }
+        
+        .value-text { color: #38BDF8; font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 1.4rem; font-weight: 800; letter-spacing: 0.05em; }
+        .tag-text { font-family: 'JetBrains Mono', 'Courier New', monospace; color: #93C5FD; font-size: 0.85em; background: rgba(147,197,253,0.1); padding: 2px 6px; border-radius: 4px; }
+
+        /* Sliders */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #94A3B8; cursor: pointer; margin-top: -6px; border: 2px solid #475569; transition: background 0.2s; }
+        input[type=range]::-webkit-slider-thumb:hover { background: #F1F5F9; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
+        
+        /* Custom Checkboxes */
+        .fat-check:checked { accent-color: var(--safe-green); }
+        .mos-check:checked { accent-color: var(--alarm-yellow); }
+
+        @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.85; } }
+        
+        .fluid-water { background-color: #1D4ED8; transition: height 0.3s ease-out; }
+        .fluid-oil { background-color: #B45309; transition: height 0.3s ease-out; border-top: 2px solid #D97706; }
+    </style>
+</head>
+<body class="w-full flex flex-col p-4 xl:p-6 gap-6 min-h-screen">
+
+    <div id="ui_global_alarm" class="hidden panel p-3 text-center font-black tracking-[0.2em] alarm-banner shadow-lg text-sm rounded uppercase">
+        CRITICAL SYSTEM ALARM — INTERLOCK ACTIVATED
+    </div>
+
+    <div class="flex flex-col h-[85vh] min-h-[750px] w-full gap-4 shrink-0">
+        
+        <div class="panel flex justify-between items-center px-6 py-4 shrink-0">
+            <div class="flex gap-6 items-center w-5/12">
+                <div id="ui_master_trip" class="px-6 py-3 rounded font-black bg-[#1E2532] text-gray-500 border border-[#2D3748] w-64 text-center tracking-[0.15em] text-sm transition-colors uppercase">
+                    MASTER SIS TRIP
+                </div>
+                <div class="px-5 py-3 rounded sub-panel font-bold flex items-center gap-3">
+                    <span class="text-gray-500 tracking-wider text-[10px] uppercase">ISA-106 Sequence:</span>
+                    <span id="ui_state" class="text-sky-400 font-black text-base uppercase tracking-wide">0 - ISOLATED</span>
+                </div>
+            </div>
+            <div class="text-xl font-black tracking-[0.25em] text-gray-300 w-2/12 text-center drop-shadow-md">
+                ICSS SIMULATOR
+            </div>
+            <div class="flex gap-4 w-5/12 justify-end">
+                <button onclick="cmdReset()" class="bg-slate-700 hover:bg-slate-600 text-white px-8 py-2.5 rounded border border-slate-500 font-bold active:bg-slate-800 transition-colors uppercase tracking-widest text-xs shadow">Reset Trip</button>
+                <button onclick="cmdStart()" class="bg-blue-700 hover:bg-blue-600 text-white px-8 py-2.5 rounded border border-blue-500 font-bold active:bg-blue-800 transition-colors uppercase tracking-widest text-xs shadow">Start Plant</button>
+                <button onclick="cmdStop()"  class="bg-red-700 hover:bg-red-600 text-white px-8 py-2.5 rounded border border-red-500 font-bold active:bg-red-800 transition-colors uppercase tracking-widest text-xs shadow">ESD Stop</button>
+            </div>
+        </div>
+
+        <div class="flex flex-row flex-1 gap-4 min-h-0">
+            
+            <div class="panel w-[340px] p-5 flex flex-col shrink-0 overflow-y-auto">
+                <div class="flex items-center justify-between border-b border-gray-700 pb-3 mb-4">
+                    <h2 class="text-xs text-gray-400 font-black tracking-[0.1em] uppercase">Physics Sandbox</h2>
+                    <span class="text-[9px] font-bold text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded tracking-wider border border-yellow-500/20">DEV MODE</span>
+                </div>
+                
+                <div class="space-y-4 flex-1">
+                    <div class="sub-panel p-4">
+                        <div class="text-[10px] uppercase text-gray-400 font-bold mb-3 tracking-wider flex justify-between items-center">
+                            <span>PT Matrix (Pressure)</span>
+                            <label class="flex items-center gap-1 cursor-pointer hover:text-white transition-colors">
+                                <input type="checkbox" id="link_pt" checked class="w-3 h-3 text-sky-500 bg-gray-900 border-gray-600 cursor-pointer">
+                                <span>LINK</span>
+                            </label>
+                        </div>
+                        <div class="flex flex-col gap-3">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="mos_pt_a" class="mos-check w-4 h-4 rounded bg-gray-800 border-gray-600 cursor-pointer" title="Maintenance Override Switch">
+                                <label class="text-[11px] font-bold text-gray-300 w-8">PT A</label>
+                                <input type="range" id="sim_pt_a" min="0" max="30000" value="13824" class="flex-1">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="mos_pt_b" class="mos-check w-4 h-4 rounded bg-gray-800 border-gray-600 cursor-pointer" title="Maintenance Override Switch">
+                                <label class="text-[11px] font-bold text-gray-300 w-8">PT B</label>
+                                <input type="range" id="sim_pt_b" min="0" max="30000" value="13824" class="flex-1">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="mos_pt_c" class="mos-check w-4 h-4 rounded bg-gray-800 border-gray-600 cursor-pointer" title="Maintenance Override Switch">
+                                <label class="text-[11px] font-bold text-gray-300 w-8">PT C</label>
+                                <input type="range" id="sim_pt_c" min="0" max="30000" value="13824" class="flex-1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sub-panel p-4">
+                        <div class="text-[10px] uppercase text-gray-400 font-bold mb-3 tracking-wider flex justify-between items-center">
+                            <span>LT Matrix (Total Level)</span>
+                            <label class="flex items-center gap-1 cursor-pointer hover:text-white transition-colors">
+                                <input type="checkbox" id="link_lt" checked class="w-3 h-3 text-sky-500 bg-gray-900 border-gray-600 cursor-pointer">
+                                <span>LINK</span>
+                            </label>
+                        </div>
+                        <div class="flex flex-col gap-3">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="mos_lt_a" class="mos-check w-4 h-4 rounded bg-gray-800 border-gray-600 cursor-pointer" title="Maintenance Override Switch">
+                                <label class="text-[11px] font-bold text-gray-300 w-8">LT A</label>
+                                <input type="range" id="sim_lt_a" min="0" max="30000" value="13824" class="flex-1">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="mos_lt_b" class="mos-check w-4 h-4 rounded bg-gray-800 border-gray-600 cursor-pointer" title="Maintenance Override Switch">
+                                <label class="text-[11px] font-bold text-gray-300 w-8">LT B</label>
+                                <input type="range" id="sim_lt_b" min="0" max="30000" value="13824" class="flex-1">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="mos_lt_c" class="mos-check w-4 h-4 rounded bg-gray-800 border-gray-600 cursor-pointer" title="Maintenance Override Switch">
+                                <label class="text-[11px] font-bold text-gray-300 w-8">LT C</label>
+                                <input type="range" id="sim_lt_c" min="0" max="30000" value="13824" class="flex-1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="sub-panel p-4">
+                        <div class="text-[10px] uppercase text-gray-400 font-bold mb-3 tracking-wider">Water Interface (Single)</div>
+                        <div class="flex items-center gap-3">
+                            <label class="text-[11px] font-bold text-gray-300 w-12">LT Int</label>
+                            <input type="range" id="sim_lt_int" min="0" max="30000" value="6912" class="flex-1">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between gap-3 mt-2">
+                        <label class="flex-1 flex items-center justify-center gap-2 cursor-pointer sub-panel px-4 py-3 hover:bg-slate-800 transition-colors">
+                            <input type="checkbox" id="sim_zsc" checked class="w-4 h-4 text-sky-500 bg-gray-900 border-gray-600 focus:ring-sky-500 cursor-pointer">
+                            <span class="text-[10px] font-bold text-gray-400 tracking-widest uppercase">ZSC (Closed)</span>
+                        </label>
+                        <label class="flex-1 flex items-center justify-center gap-2 cursor-pointer sub-panel px-4 py-3 hover:bg-slate-800 transition-colors">
+                            <input type="checkbox" id="sim_zso" class="w-4 h-4 text-sky-500 bg-gray-900 border-gray-600 focus:ring-sky-500 cursor-pointer">
+                            <span class="text-[10px] font-bold text-gray-400 tracking-widest uppercase">ZSO (Open)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col gap-4 min-w-[550px]">
+                
+                <div id="ui_advisor" class="panel h-12 flex items-center justify-center font-black tracking-widest text-[11px] shadow-md transition-colors bg-sky-900/20 border-sky-500/30 text-sky-300 shrink-0 uppercase">
+                    SYSTEM ADVISOR: INITIALIZING...
+                </div>
+
+                <div class="panel flex-1 relative flex items-center justify-center overflow-hidden bg-[#0F1219] shadow-inner">
+                    
+                    <div class="relative w-[65%] max-w-[700px] h-[55%] min-h-[240px]">
+                        
+                        <div class="absolute right-[calc(100%-35px)] top-[20%] w-[120px] h-4 bg-slate-600 -translate-y-1/2 border-y border-slate-700 z-0"></div>
+                        
+                        <div class="absolute bottom-[calc(100%-6px)] left-[30%] w-4 h-[80px] bg-slate-600 -translate-x-1/2 border-x border-slate-700 z-0"></div>
+                        
+                        <div class="absolute bottom-[calc(100%-6px)] right-[30%] w-4 h-[80px] bg-slate-600 translate-x-1/2 border-x border-slate-700 z-0"></div>
+
+                        <div class="absolute left-[calc(100%-20px)] top-[45%] w-[110px] h-4 bg-slate-600 -translate-y-1/2 border-y border-slate-700 z-0"></div>
+                        
+                        <div class="absolute left-[calc(100%-35px)] bottom-[20%] w-[120px] h-4 bg-slate-600 -translate-y-1/2 border-y border-slate-700 z-0"></div>
+
+                        <div id="ui_sdv" class="absolute right-[calc(100%+30px)] top-[20%] w-9 h-9 bg-red-600 border-2 border-gray-300 -translate-y-1/2 flex items-center justify-center font-black text-white text-[8px] z-20 rounded shadow-md transition-colors tracking-wider">SDV</div>
+                        
+                        <div id="ui_pcv_flare" class="absolute left-[30%] bottom-[calc(100%+54px)] w-8 h-8 bg-red-600 border-2 border-gray-300 -translate-x-1/2 flex items-center justify-center font-black text-white text-[7px] z-20 rounded shadow-md transition-colors text-center leading-none">FLARE<br>PCV</div>
+                        
+                        <div id="ui_pcv_sales" class="absolute right-[30%] bottom-[calc(100%+54px)] w-8 h-8 bg-red-600 border-2 border-gray-300 translate-x-1/2 flex items-center justify-center font-black text-white text-[7px] z-20 rounded shadow-md transition-colors text-center leading-none">SALES<br>PCV</div>
+                        
+                        <div id="ui_lcv_oil" class="absolute left-[calc(100%+20px)] top-[45%] w-8 h-8 bg-red-600 border-2 border-gray-300 -translate-y-1/2 flex items-center justify-center font-black text-white text-[7px] z-20 rounded shadow-md transition-colors text-center leading-none">OIL<br>LCV</div>
+                        
+                        <div id="ui_lcv_wat" class="absolute left-[calc(100%+20px)] bottom-[20%] w-8 h-8 bg-red-600 border-2 border-gray-300 -translate-y-1/2 flex items-center justify-center font-black text-white text-[7px] z-20 rounded shadow-md transition-colors text-center leading-none">WAT<br>LCV</div>
+
+                        <div class="w-full h-full bg-slate-800 border-[6px] border-slate-600 rounded-[100px] relative flex flex-col justify-end shadow-2xl overflow-hidden z-10">
+                            <div id="ui_graphic_oil" class="absolute bottom-0 w-full fluid-oil z-10" style="height: 50%;"></div>
+                            <div id="ui_graphic_wat" class="absolute bottom-0 w-full fluid-water z-20" style="height: 25%;"></div>
+                            
+                            <div class="absolute top-5 left-10 text-slate-500 font-black tracking-[0.2em] text-2xl z-30 opacity-60">V-100</div>
+                            
+                            <div class="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
+                                <div class="flex gap-5 bg-slate-900/90 p-4 rounded-xl border border-slate-700 backdrop-blur-md shadow-2xl">
+                                    <div class="text-center px-2">
+                                        <div class="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Pressure</div>
+                                        <div id="ui_val_pressure" class="value-text text-sky-400">0.0 Bar</div>
+                                    </div>
+                                    <div class="w-px h-10 bg-slate-700 my-auto"></div>
+                                    <div class="text-center px-2">
+                                        <div class="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Total Level</div>
+                                        <div id="ui_val_liq" class="value-text text-yellow-500">0.0 %</div>
+                                    </div>
+                                    <div class="w-px h-10 bg-slate-700 my-auto"></div>
+                                    <div class="text-center px-2">
+                                        <div class="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Water Int</div>
+                                        <div id="ui_val_wat" class="value-text text-blue-400">0.0 %</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="absolute right-[calc(100%+75px)] top-[calc(20%-20px)] text-[8px] font-bold text-gray-500 uppercase tracking-[0.1em] whitespace-nowrap">Well Inlet &rarr;</div>
+                        <div class="absolute left-[30%] bottom-[calc(100%+95px)] -translate-x-1/2 text-[8px] font-bold text-gray-500 uppercase tracking-[0.1em] whitespace-nowrap">&uarr; To Flare Stack</div>
+                        <div class="absolute right-[30%] bottom-[calc(100%+95px)] translate-x-1/2 text-[8px] font-bold text-gray-500 uppercase tracking-[0.1em] whitespace-nowrap">&uarr; To Sales Gas</div>
+                        <div class="absolute left-[calc(100%+60px)] top-[calc(45%-20px)] text-[8px] font-bold text-gray-500 uppercase tracking-[0.1em] whitespace-nowrap">&rarr; To Oil Pipeline</div>
+                        <div class="absolute left-[calc(100%+60px)] bottom-[calc(20%+10px)] text-[8px] font-bold text-gray-500 uppercase tracking-[0.1em] whitespace-nowrap">&rarr; To Water Trtmt</div>
+
+                    </div>
+                </div>
+
+                <div class="panel h-24 p-3 flex items-center justify-between shrink-0">
+                    <div class="flex gap-3 h-full items-center w-full">
+                        
+                        <div class="h-full px-3 rounded sub-panel flex flex-col justify-center items-center w-32 shadow-inner">
+                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest mb-1">PT Logic</span>
+                            <span id="ui_pt_status" class="font-black text-green-500 text-xl leading-none">3/3</span>
+                            <span id="ui_pt_degrad" class="text-[8px] text-gray-500 mt-1 tracking-wider uppercase">2oo3 Active</span>
+                        </div>
+                        <div class="h-full px-3 rounded sub-panel flex flex-col justify-center items-center w-32 shadow-inner">
+                            <span class="text-[9px] text-gray-500 font-bold uppercase tracking-widest mb-1">LT Logic</span>
+                            <span id="ui_lt_status" class="font-black text-green-500 text-xl leading-none">3/3</span>
+                            <span id="ui_lt_degrad" class="text-[8px] text-gray-500 mt-1 tracking-wider uppercase">2oo3 Active</span>
+                        </div>
+
+                        <div class="w-px h-2/3 bg-slate-700 mx-1"></div>
+
+                        <div id="ui_apm_transit" class="h-full px-3 rounded border border-slate-700 flex flex-col justify-center items-center flex-1 bg-slate-800 transition-colors shadow-inner">
+                            <span class="text-[9px] text-gray-400 font-bold uppercase text-center leading-tight mb-1 tracking-wider">Transit<br>Watchdog</span>
+                            <span class="font-black text-gray-500 text-[10px] tracking-wide">NORMAL</span>
+                        </div>
+                        
+                        <div id="ui_apm_bypass" class="h-full px-3 rounded border border-slate-700 flex flex-col justify-center items-center flex-1 bg-slate-800 relative transition-colors shadow-inner">
+                            <span class="text-[9px] text-gray-400 font-bold uppercase text-center leading-tight mb-1 tracking-wider">Stale Bypass<br>Timer</span>
+                            <span id="ui_bypass_text" class="font-black text-gray-500 text-[10px] tracking-wide">INACTIVE</span>
+                            <div id="ui_veto_alert" class="absolute -top-2 -right-2 bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded hidden shadow-md uppercase tracking-wider">VETO</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel w-[320px] p-5 flex flex-col shrink-0 overflow-y-auto">
+                <h2 class="text-xs text-gray-400 font-black tracking-[0.1em] uppercase mb-4 border-b border-gray-700 pb-3">
+                    BPCS Outputs (PID)
+                </h2>
+
+                <div class="flex flex-col gap-4">
+                    <div class="sub-panel p-4 shadow-inner">
+                        <div class="text-[10px] font-bold text-gray-400 mb-2 flex justify-between tracking-wider uppercase">
+                            <span>Sales Gas PCV</span> 
+                            <span id="ui_pcv_sales_val" class="text-sky-400 font-black">0.0%</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div id="ui_pcv_sales_bar" class="h-full bg-sky-500 w-0 transition-all duration-200"></div>
+                        </div>
+                    </div>
+
+                    <div class="sub-panel p-4 shadow-inner">
+                        <div class="text-[10px] font-bold text-gray-400 mb-2 flex justify-between tracking-wider uppercase">
+                            <span>Emerg. Flare PCV</span> 
+                            <span id="ui_pcv_flare_val" class="text-yellow-500 font-black">0.0%</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div id="ui_pcv_flare_bar" class="h-full bg-yellow-500 w-0 transition-all duration-200"></div>
+                        </div>
+                    </div>
+
+                    <div class="h-px w-full bg-slate-700 my-1"></div>
+
+                    <div class="sub-panel p-4 shadow-inner">
+                        <div class="text-[10px] font-bold text-gray-400 mb-2 flex justify-between tracking-wider uppercase">
+                            <span>Oil Drain LCV</span> 
+                            <span id="ui_lcv_oil_val" class="text-yellow-600 font-black">0.0%</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden mb-4">
+                            <div id="ui_lcv_oil_bar" class="h-full bg-yellow-600 w-0 transition-all duration-200"></div>
+                        </div>
+                        
+                        <div class="flex flex-col gap-2 bg-slate-800/50 p-2.5 rounded border border-slate-700">
+                            <label class="flex items-center gap-2 cursor-pointer w-max">
+                                <input type="checkbox" id="sim_oil_man" class="w-3 h-3 rounded text-sky-500 bg-slate-900 border-gray-600 cursor-pointer">
+                                <span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Manual Override</span>
+                            </label>
+                            <input type="range" id="sim_oil_man_val" min="0" max="100" value="0" class="w-full mt-1">
+                        </div>
+                    </div>
+
+                    <div class="sub-panel p-4 shadow-inner">
+                        <div class="text-[10px] font-bold text-gray-400 mb-2 flex justify-between tracking-wider uppercase">
+                            <span>Water Drain LCV</span> 
+                            <span id="ui_lcv_wat_val" class="text-blue-500 font-black">0.0%</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div id="ui_lcv_wat_bar" class="h-full bg-blue-600 w-0 transition-all duration-200"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto w-full mb-16 mt-8">
+        <div class="panel p-8 shadow-2xl border-t-[6px] border-t-sky-600">
+            <h1 class="text-3xl font-black text-white tracking-[0.1em] mb-2 uppercase">System Validation & FAT Protocol</h1>
+            <p class="text-slate-400 mb-8 max-w-4xl leading-relaxed text-base">
+                This environment executes the Tier-1 <strong>IEC 61131-3</strong> logic engine for a high-pressure 3-Phase Separator via a JavaScript port. It strictly enforces <strong>IEC 61511</strong> Functional Safety, <strong>ISA-106</strong> Procedural Automation, and <strong>ISA-18.2</strong> Alarm Management. Utilize the checklists below to conduct a comprehensive Factory Acceptance Test (FAT).
+            </p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <div class="sub-panel p-6 shadow-md border-l-4 border-l-sky-500">
+                    <h3 class="text-sky-400 font-black tracking-widest mb-2 flex items-center gap-2 text-base uppercase">
+                        <span class="bg-sky-900/50 px-2 py-1 rounded text-sky-200 text-sm">01</span> ISA-106 Deterministic Startup
+                    </h3>
+                    <p class="text-sm text-slate-400 mb-4 min-h-[3rem]">Validates sequential state logic, ensuring purged initialization and safe pressurization prior to BPCS handover.</p>
+                    <ul class="space-y-3 text-sm text-slate-300">
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Verify <span class="tag-text">Master Trip</span> is latched upon Black-Start. Ensure <span class="tag-text">ZSC (Closed)</span> is checked, then click <b>Reset Trip</b>.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Click <b>Start Plant</b>. Verify system enters <span class="tag-text">State 1 (Purging)</span>.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Decrease PT sliders to 0.0 Bar. Verify transition to <span class="tag-text">State 2</span>. <b>When the SDV turns Green, immediately check ZSO (Open).</b></span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Increase PT sliders > 45.0 Bar. Verify transition to <span class="tag-text">State 3 (Running)</span> and BPCS PID activation.</span></li>
+                    </ul>
+                </div>
+
+                <div class="sub-panel p-6 shadow-md border-l-4 border-l-blue-500">
+                    <h3 class="text-blue-500 font-black tracking-widest mb-2 flex items-center gap-2 text-base uppercase">
+                        <span class="bg-blue-900/50 px-2 py-1 rounded text-blue-200 text-sm">02</span> BPCS Split-Range Pressure Control
+                    </h3>
+                    <p class="text-sm text-slate-400 mb-4 min-h-[3rem]">Verifies economic process control and dynamic safety flare venting prior to an SIS Trip constraint.</p>
+                    <ul class="space-y-3 text-sm text-slate-300">
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>In State 3, vary PT sliders between 45.0 and 52.0 Bar. Verify <span class="tag-text">Sales Gas PCV</span> dynamically modulates accordingly.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Increase PT above 52.0 Bar. Verify Sales PCV pins at 100% and <span class="tag-text">Emerg. Flare PCV</span> turns green and ramps open to prevent an SIS Trip.</span></li>
+                    </ul>
+                </div>
+
+                <div class="sub-panel p-6 shadow-md border-l-4 border-l-teal-500">
+                    <h3 class="text-teal-500 font-black tracking-widest mb-2 flex items-center gap-2 text-base uppercase">
+                        <span class="bg-teal-900/50 px-2 py-1 rounded text-teal-200 text-sm">03</span> BPCS Anti-Blow-By & Plausibility Clamps
+                    </h3>
+                    <p class="text-sm text-slate-400 mb-4 min-h-[3rem]">Ensures physical plausibility clamping and validates overrides to prevent catastrophic gas blow-by into liquid lines.</p>
+                    <ul class="space-y-3 text-sm text-slate-300">
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span><b>Anti-Blow-By:</b> Decrease LT (Total Level) < 5.0%. Verify Oil and Water valves are systematically overridden to 0% (Red) to prevent gas escape.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span><b>Physics Clamp:</b> Attempt to drag Water Interface higher than Total Level. Verify logic mathematically clamps Interface to <= Total Level.</span></li>
+                    </ul>
+                </div>
+
+                <div class="sub-panel p-6 shadow-md border-l-4 border-l-yellow-500">
+                    <h3 class="text-yellow-500 font-black tracking-widest mb-2 flex items-center gap-2 text-base uppercase">
+                        <span class="bg-yellow-900/50 px-2 py-1 rounded text-yellow-200 text-sm">04</span> IEC 61511 Safety Matrix Degradation
+                    </h3>
+                    <p class="text-sm text-slate-400 mb-4 min-h-[3rem]">Demonstrates dynamic functional safety matrix shifting from 2oo3 to a highly sensitive 1oo2 architecture.</p>
+                    <ul class="space-y-3 text-sm text-slate-300">
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Uncheck <b>LINK</b> on the PT matrix to simulate independent sensor deviation.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Check the MOS Bypass for PT A, OR drag PT A <b>all the way right</b> to simulate a hardware short-circuit.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Verify PT Matrix safely degrades to <span class="tag-text">1oo2 Degraded</span> without tripping the facility.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Drag PT B above 55.0 Bar. Verify the 1oo2 matrix mathematically catches the localized hazard and trips the plant.</span></li>
+                    </ul>
+                </div>
+
+                <div class="sub-panel p-6 shadow-md border-l-4 border-l-orange-500">
+                    <h3 class="text-orange-500 font-black tracking-widest mb-2 flex items-center gap-2 text-base uppercase">
+                        <span class="bg-orange-900/50 px-2 py-1 rounded text-orange-200 text-sm">05</span> Dynamic Bypass Veto (Safety Override)
+                    </h3>
+                    <p class="text-sm text-slate-400 mb-4 min-h-[3rem]">Validates that active Maintenance Override Switches (MOS) are systematically revoked during critical hazard spikes.</p>
+                    <ul class="space-y-3 text-sm text-slate-300">
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Reset plant to State 3. Ensure vessel pressure is < 49.0 Bar. Activate <b>MOS Bypass</b> for PT A.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Simulate process hazard: Drag PT B and PT C to 50.0 Bar (> 90% of trip limit).</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Verify the red <span class="tag-text">VETO</span> alert activates, automatically shredding the human bypass request to ensure full matrix protection.</span></li>
+                    </ul>
+                </div>
+
+                <div class="sub-panel p-6 shadow-md border-l-4 border-l-red-500">
+                    <h3 class="text-red-500 font-black tracking-widest mb-2 flex items-center gap-2 text-base uppercase">
+                        <span class="bg-red-900/50 px-2 py-1 rounded text-red-200 text-sm">06</span> APM Transit Watchdog & Trip Latching
+                    </h3>
+                    <p class="text-sm text-slate-400 mb-4 min-h-[3rem]">Evaluates predictive maintenance stroke timers, limit switch discrepancy tracking, and ESD latch memory.</p>
+                    <ul class="space-y-3 text-sm text-slate-300">
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Click <b>ESD Stop</b> to initiate trip. Uncheck ZSO and check <span class="tag-text">ZSC (Closed)</span> to clear advisor.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Reset to State 1, then lower pressure to enter State 2. SDV will command Open (Green).</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span><b>Transit Watchdog:</b> Do not check the ZSO limit switch. Wait exactly 15 seconds.</span></li>
+                        <li class="flex gap-3"><input type="checkbox" class="fat-check mt-1 w-4 h-4 cursor-pointer shrink-0"><span>Verify the APM Watchdog registers a <span class="tag-text">STUCK VALVE</span>, triggering an immediate Master SIS Trip.</span></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="mt-8 text-center text-[10px] text-slate-600 font-mono tracking-[0.2em] border-t border-slate-800 pt-6 uppercase">
+                END OF FAT PROTOCOL // SYSTEM ARCHITECT REVIEW APPROVED // ISA-101 COMPLIANT
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================================
+        // ENGINEERING CONSTANTS (Tier-1 Standard)
+        // =====================================================================
+        const SYS_TRIP_PRESS = 55.0; const SYS_START_PRESS = 45.0; const SYS_DROP_PRESS = 40.0; const SYS_PURGE_PRESS = 5.0;
+        const LIQ_TRIP_HIGH = 85.0; const LIQ_TRIP_LOW = 15.0;
+        const RAW_MIN = 0.0; const RAW_MAX = 27648.0; const RAW_FAULT_LOW = -50; const RAW_FAULT_HIGH = 29030;
+
+        // =====================================================================
+        // GLOBAL VARIABLE LIST (GVL)
+        // =====================================================================
+        let GVL = {
+            First_Scan_Init: true,
+            Raw_PT_A: 13824, Raw_PT_B: 13824, Raw_PT_C: 13824, Raw_LT_Tot_A: 13824, Raw_LT_Tot_B: 13824, Raw_LT_Tot_C: 13824, Raw_LT_Inter: 6912,
+            Inlet_SDV_ZSC: true, Inlet_SDV_ZSO: false,
+            HMI_Reset_Cmd: false, HMI_Start_Cmd: false, HMI_Stop_Cmd: false, HMI_LCV_Oil_Manual_Mode: false, HMI_LCV_Oil_Manual_Value: 0.0,
+            HMI_PT_A_MOS: false, HMI_PT_B_MOS: false, HMI_PT_C_MOS: false, HMI_LT_A_MOS: false, HMI_LT_B_MOS: false, HMI_LT_C_MOS: false,
+            Current_State: 0, Master_SIS_Trip: true, Inlet_SDV: false,
+            PT_A_Scaled: 0.0, PT_B_Scaled: 0.0, PT_C_Scaled: 0.0, Tot_A_Pct: 0.0, Tot_B_Pct: 0.0, Tot_C_Pct: 0.0, Vessel_Pressure: 0.0, Total_Liq_Pct: 0.0, Water_Int_Pct: 0.0,
+            PCV_Sales_Output: 0.0, PCV_Flare_Output: 0.0, LCV_Oil_Output: 0.0, LCV_Water_Output: 0.0,
+            PT_A_Fault: false, PT_B_Fault: false, PT_C_Fault: false, LT_A_Fault: false, LT_B_Fault: false, LT_C_Fault: false,
+            PT_A_Ignored: false, PT_B_Ignored: false, PT_C_Ignored: false, LT_A_Ignored: false, LT_B_Ignored: false, LT_C_Ignored: false,
+            Ignore_Count: 0, LT_Ignore_Count: 0, PT_Matrix_Fault: false, LT_Matrix_Fault: false, Bypass_Veto_Active: false,
+            PSHH_Tripped: false, LSHH_Tripped: false, LSLL_Tripped: false, Inlet_Transit_Err: false, Stale_Bypass_Alarm: false,
+            State2_Timer: 0, Startup_Grace_Timer: 0, Transit_Timer: 0, Shift_MOS_Timer: 0, Global_Alarm: false
+        };
+
+        // DOM Element Mapping
+        const DOM = {
+            pt_a: document.getElementById('sim_pt_a'), pt_b: document.getElementById('sim_pt_b'), pt_c: document.getElementById('sim_pt_c'),
+            lt_a: document.getElementById('sim_lt_a'), lt_b: document.getElementById('sim_lt_b'), lt_c: document.getElementById('sim_lt_c'), lt_int: document.getElementById('sim_lt_int'),
+            zsc: document.getElementById('sim_zsc'), zso: document.getElementById('sim_zso'),
+            mos_pt_a: document.getElementById('mos_pt_a'), mos_pt_b: document.getElementById('mos_pt_b'), mos_pt_c: document.getElementById('mos_pt_c'),
+            mos_lt_a: document.getElementById('mos_lt_a'), mos_lt_b: document.getElementById('mos_lt_b'), mos_lt_c: document.getElementById('mos_lt_c'),
+            link_pt: document.getElementById('link_pt'), link_lt: document.getElementById('link_lt'),
+            oil_man: document.getElementById('sim_oil_man'), oil_man_val: document.getElementById('sim_oil_man_val'),
+            state: document.getElementById('ui_state'), master_trip: document.getElementById('ui_master_trip'), sdv: document.getElementById('ui_sdv'), advisor: document.getElementById('ui_advisor'),
+            val_pres: document.getElementById('ui_val_pressure'), val_liq: document.getElementById('ui_val_liq'), val_wat: document.getElementById('ui_val_wat'),
+            sales_val: document.getElementById('ui_pcv_sales_val'), sales_bar: document.getElementById('ui_pcv_sales_bar'), flare_val: document.getElementById('ui_pcv_flare_val'), flare_bar: document.getElementById('ui_pcv_flare_bar'),
+            oil_val: document.getElementById('ui_lcv_oil_val'), oil_bar: document.getElementById('ui_lcv_oil_bar'), wat_val: document.getElementById('ui_lcv_wat_val'), wat_bar: document.getElementById('ui_lcv_wat_bar'),
+            pt_status: document.getElementById('ui_pt_status'), pt_degrad: document.getElementById('ui_pt_degrad'), lt_status: document.getElementById('ui_lt_status'), lt_degrad: document.getElementById('ui_lt_degrad'),
+            apm_transit: document.getElementById('ui_apm_transit'), apm_bypass: document.getElementById('ui_apm_bypass'), bypass_text: document.getElementById('ui_bypass_text'), veto_alert: document.getElementById('ui_veto_alert'),
+            g_oil: document.getElementById('ui_graphic_oil'), g_wat: document.getElementById('ui_graphic_wat'), alarm_banner: document.getElementById('ui_global_alarm'),
+            
+            // Visual Valve Bindings
+            pcv_flare: document.getElementById('ui_pcv_flare'),
+            pcv_sales: document.getElementById('ui_pcv_sales'),
+            lcv_oil: document.getElementById('ui_lcv_oil'),
+            lcv_wat: document.getElementById('ui_lcv_wat')
+        };
+
+        // UX: Linked Sliders & Mutually Exclusive Limit Switches
+        const syncPT = (val) => { DOM.pt_a.value = val; DOM.pt_b.value = val; DOM.pt_c.value = val; };
+        DOM.pt_a.addEventListener('input', (e) => { if(DOM.link_pt.checked) syncPT(e.target.value); });
+        DOM.pt_b.addEventListener('input', (e) => { if(DOM.link_pt.checked) syncPT(e.target.value); });
+        DOM.pt_c.addEventListener('input', (e) => { if(DOM.link_pt.checked) syncPT(e.target.value); });
+
+        const syncLT = (val) => { DOM.lt_a.value = val; DOM.lt_b.value = val; DOM.lt_c.value = val; };
+        DOM.lt_a.addEventListener('input', (e) => { if(DOM.link_lt.checked) syncLT(e.target.value); });
+        DOM.lt_b.addEventListener('input', (e) => { if(DOM.link_lt.checked) syncLT(e.target.value); });
+        DOM.lt_c.addEventListener('input', (e) => { if(DOM.link_lt.checked) syncLT(e.target.value); });
+
+        DOM.zsc.addEventListener('change', (e) => { if (e.target.checked) DOM.zso.checked = false; });
+        DOM.zso.addEventListener('change', (e) => { if (e.target.checked) DOM.zsc.checked = false; });
+
+        // Pushbuttons (Fixed cmdStop to latch the master trip)
+        function cmdReset() { GVL.HMI_Reset_Cmd = true; } 
+        function cmdStart() { GVL.HMI_Start_Cmd = true; } 
+        function cmdStop()  { GVL.HMI_Stop_Cmd = true; GVL.Master_SIS_Trip = true; }
+
+        // =====================================================================
+        // MAIN PLC LOGIC ENGINE (100ms Scan Cycle)
+        // =====================================================================
+        setInterval(function PLC_PRG() {
+            // SEC 0: Boot
+            if (GVL.First_Scan_Init) { GVL.Current_State = 0; GVL.Inlet_SDV = false; GVL.Master_SIS_Trip = true; GVL.First_Scan_Init = false; }
+            
+            // Read UI I/O
+            GVL.Raw_PT_A = parseInt(DOM.pt_a.value); GVL.Raw_PT_B = parseInt(DOM.pt_b.value); GVL.Raw_PT_C = parseInt(DOM.pt_c.value);
+            GVL.Raw_LT_Tot_A = parseInt(DOM.lt_a.value); GVL.Raw_LT_Tot_B = parseInt(DOM.lt_b.value); GVL.Raw_LT_Tot_C = parseInt(DOM.lt_c.value);
+            GVL.Raw_LT_Inter = parseInt(DOM.lt_int.value);
+            GVL.Inlet_SDV_ZSC = DOM.zsc.checked; GVL.Inlet_SDV_ZSO = DOM.zso.checked;
+            
+            GVL.HMI_PT_A_MOS = DOM.mos_pt_a.checked; GVL.HMI_PT_B_MOS = DOM.mos_pt_b.checked; GVL.HMI_PT_C_MOS = DOM.mos_pt_c.checked;
+            GVL.HMI_LT_A_MOS = DOM.mos_lt_a.checked; GVL.HMI_LT_B_MOS = DOM.mos_lt_b.checked; GVL.HMI_LT_C_MOS = DOM.mos_lt_c.checked;
+            GVL.HMI_LCV_Oil_Manual_Mode = DOM.oil_man.checked; GVL.HMI_LCV_Oil_Manual_Value = parseFloat(DOM.oil_man_val.value);
+
+            // SEC 1: NE43 Validation & Dynamic Averaging
+            GVL.PT_A_Fault = (GVL.Raw_PT_A < RAW_FAULT_LOW) || (GVL.Raw_PT_A > RAW_FAULT_HIGH); GVL.PT_B_Fault = (GVL.Raw_PT_B < RAW_FAULT_LOW) || (GVL.Raw_PT_B > RAW_FAULT_HIGH); GVL.PT_C_Fault = (GVL.Raw_PT_C < RAW_FAULT_LOW) || (GVL.Raw_PT_C > RAW_FAULT_HIGH);
+            GVL.LT_A_Fault = (GVL.Raw_LT_Tot_A < RAW_FAULT_LOW) || (GVL.Raw_LT_Tot_A > RAW_FAULT_HIGH); GVL.LT_B_Fault = (GVL.Raw_LT_Tot_B < RAW_FAULT_LOW) || (GVL.Raw_LT_Tot_B > RAW_FAULT_HIGH); GVL.LT_C_Fault = (GVL.Raw_LT_Tot_C < RAW_FAULT_LOW) || (GVL.Raw_LT_Tot_C > RAW_FAULT_HIGH);
+
+            if (!GVL.PT_A_Fault) GVL.PT_A_Scaled = (GVL.Raw_PT_A / RAW_MAX) * 100.0; if (!GVL.PT_B_Fault) GVL.PT_B_Scaled = (GVL.Raw_PT_B / RAW_MAX) * 100.0; if (!GVL.PT_C_Fault) GVL.PT_C_Scaled = (GVL.Raw_PT_C / RAW_MAX) * 100.0;
+            if (!GVL.LT_A_Fault) GVL.Tot_A_Pct = (GVL.Raw_LT_Tot_A / RAW_MAX) * 100.0; if (!GVL.LT_B_Fault) GVL.Tot_B_Pct = (GVL.Raw_LT_Tot_B / RAW_MAX) * 100.0; if (!GVL.LT_C_Fault) GVL.Tot_C_Pct = (GVL.Raw_LT_Tot_C / RAW_MAX) * 100.0;
+            
+            GVL.Water_Int_Pct = Math.max(0, (GVL.Raw_LT_Inter / RAW_MAX) * 100.0);
+
+            // PT Average
+            let ht_pt = 0; let sum_pt = 0.0;
+            if (!GVL.PT_A_Fault) { ht_pt++; sum_pt += GVL.PT_A_Scaled; } if (!GVL.PT_B_Fault) { ht_pt++; sum_pt += GVL.PT_B_Scaled; } if (!GVL.PT_C_Fault) { ht_pt++; sum_pt += GVL.PT_C_Scaled; }
+            GVL.Vessel_Pressure = ht_pt > 0 ? sum_pt / ht_pt : 0.0;
+
+            // LT Average
+            let ht_lt = 0; let sum_lt = 0.0;
+            if (!GVL.LT_A_Fault) { ht_lt++; sum_lt += GVL.Tot_A_Pct; } if (!GVL.LT_B_Fault) { ht_lt++; sum_lt += GVL.Tot_B_Pct; } if (!GVL.LT_C_Fault) { ht_lt++; sum_lt += GVL.Tot_C_Pct; }
+            GVL.Total_Liq_Pct = ht_lt > 0 ? sum_lt / ht_lt : 0.0;
+
+            // Tier-1 Physical Plausibility Clamp
+            if (GVL.Water_Int_Pct > GVL.Total_Liq_Pct) GVL.Water_Int_Pct = GVL.Total_Liq_Pct;
+
+            // SEC 2: IEC 61511 Discrete Votes
+            let ptA_hi = !GVL.PT_A_Fault && (GVL.PT_A_Scaled >= SYS_TRIP_PRESS); let ptB_hi = !GVL.PT_B_Fault && (GVL.PT_B_Scaled >= SYS_TRIP_PRESS); let ptC_hi = !GVL.PT_C_Fault && (GVL.PT_C_Scaled >= SYS_TRIP_PRESS);
+            let ltA_hi = !GVL.LT_A_Fault && (GVL.Tot_A_Pct >= LIQ_TRIP_HIGH); let ltB_hi = !GVL.LT_B_Fault && (GVL.Tot_B_Pct >= LIQ_TRIP_HIGH); let ltC_hi = !GVL.LT_C_Fault && (GVL.Tot_C_Pct >= LIQ_TRIP_HIGH);
+            let ltA_lo = !GVL.LT_A_Fault && (GVL.Tot_A_Pct <= LIQ_TRIP_LOW); let ltB_lo = !GVL.LT_B_Fault && (GVL.Tot_B_Pct <= LIQ_TRIP_LOW); let ltC_lo = !GVL.LT_C_Fault && (GVL.Tot_C_Pct <= LIQ_TRIP_LOW);
+
+            // SEC 3: Matrix Degradation & Veto
+            GVL.Bypass_Veto_Active = (GVL.Vessel_Pressure >= (SYS_TRIP_PRESS * 0.90)) || (GVL.Total_Liq_Pct >= (LIQ_TRIP_HIGH * 0.90));
+
+            GVL.PT_A_Ignored = (GVL.HMI_PT_A_MOS && !GVL.Bypass_Veto_Active) || GVL.PT_A_Fault; GVL.PT_B_Ignored = (GVL.HMI_PT_B_MOS && !GVL.Bypass_Veto_Active) || GVL.PT_B_Fault; GVL.PT_C_Ignored = (GVL.HMI_PT_C_MOS && !GVL.Bypass_Veto_Active) || GVL.PT_C_Fault;
+            GVL.LT_A_Ignored = (GVL.HMI_LT_A_MOS && !GVL.Bypass_Veto_Active) || GVL.LT_A_Fault; GVL.LT_B_Ignored = (GVL.HMI_LT_B_MOS && !GVL.Bypass_Veto_Active) || GVL.LT_B_Fault; GVL.LT_C_Ignored = (GVL.HMI_LT_C_MOS && !GVL.Bypass_Veto_Active) || GVL.LT_C_Fault;
+
+            GVL.Ignore_Count = (GVL.PT_A_Ignored?1:0) + (GVL.PT_B_Ignored?1:0) + (GVL.PT_C_Ignored?1:0);
+            GVL.LT_Ignore_Count = (GVL.LT_A_Ignored?1:0) + (GVL.LT_B_Ignored?1:0) + (GVL.LT_C_Ignored?1:0);
+
+            // PSHH Matrix
+            if (GVL.Ignore_Count === 0) GVL.PSHH_Tripped = (ptA_hi && ptB_hi) || (ptB_hi && ptC_hi) || (ptA_hi && ptC_hi);
+            else if (GVL.Ignore_Count === 1) {
+                if (GVL.PT_A_Ignored) GVL.PSHH_Tripped = (ptB_hi || ptC_hi); if (GVL.PT_B_Ignored) GVL.PSHH_Tripped = (ptA_hi || ptC_hi); if (GVL.PT_C_Ignored) GVL.PSHH_Tripped = (ptA_hi || ptB_hi);
+            } else GVL.PSHH_Tripped = true;
+
+            // LSHH Matrix
+            if (GVL.LT_Ignore_Count === 0) GVL.LSHH_Tripped = (ltA_hi && ltB_hi) || (ltB_hi && ltC_hi) || (ltA_hi && ltC_hi);
+            else if (GVL.LT_Ignore_Count === 1) {
+                if (GVL.LT_A_Ignored) GVL.LSHH_Tripped = (ltB_hi || ltC_hi); if (GVL.LT_B_Ignored) GVL.LSHH_Tripped = (ltA_hi || ltC_hi); if (GVL.LT_C_Ignored) GVL.LSHH_Tripped = (ltA_hi || ltB_hi);
+            } else GVL.LSHH_Tripped = true;
+
+            // LSLL Matrix (With Grace Timer)
+            if (GVL.Current_State === 2 || GVL.Current_State === 3) GVL.Startup_Grace_Timer++; else GVL.Startup_Grace_Timer = 0;
+            let grace_q = (GVL.Startup_Grace_Timer > 150); // 15s
+
+            if (GVL.LT_Ignore_Count === 0) GVL.LSLL_Tripped = grace_q && ((ltA_lo && ltB_lo) || (ltB_lo && ltC_lo) || (ltA_lo && ltC_lo));
+            else if (GVL.LT_Ignore_Count === 1) {
+                if (GVL.LT_A_Ignored) GVL.LSLL_Tripped = grace_q && (ltB_lo || ltC_lo); if (GVL.LT_B_Ignored) GVL.LSLL_Tripped = grace_q && (ltA_lo || ltC_lo); if (GVL.LT_C_Ignored) GVL.LSLL_Tripped = grace_q && (ltA_lo || ltB_lo);
+            } else GVL.LSLL_Tripped = grace_q && true;
+
+            GVL.PT_Matrix_Fault = (GVL.Ignore_Count >= 2); GVL.LT_Matrix_Fault = (GVL.LT_Ignore_Count >= 2);
+
+            // SEC 4: Master Trips & Reset Executive
+            if (GVL.PSHH_Tripped || GVL.LSHH_Tripped || GVL.LSLL_Tripped || GVL.PT_Matrix_Fault || GVL.LT_Matrix_Fault || GVL.Inlet_Transit_Err) {
+                GVL.Master_SIS_Trip = true;
+            }
+
+            if (GVL.HMI_Reset_Cmd && GVL.Master_SIS_Trip && (GVL.Vessel_Pressure < SYS_TRIP_PRESS) && (GVL.Total_Liq_Pct < LIQ_TRIP_HIGH) && GVL.Inlet_SDV_ZSC && !GVL.PT_Matrix_Fault && !GVL.LT_Matrix_Fault) {
+                GVL.PSHH_Tripped = false; GVL.LSHH_Tripped = false; GVL.LSLL_Tripped = false; GVL.Inlet_Transit_Err = false; GVL.Master_SIS_Trip = false; GVL.Current_State = 0;
+            }
+
+            // SEC 5: ISA-106 State Machine
+            switch(GVL.Current_State) {
+                case 0: GVL.Inlet_SDV = false; if (GVL.HMI_Start_Cmd && !GVL.Master_SIS_Trip) GVL.Current_State = 1; break;
+                case 1: if (GVL.Vessel_Pressure <= SYS_PURGE_PRESS) GVL.Current_State = 2; break;
+                case 2: GVL.Inlet_SDV = true; GVL.State2_Timer++;
+                    if (GVL.Inlet_SDV_ZSO && GVL.Vessel_Pressure >= SYS_START_PRESS) { GVL.Current_State = 3; GVL.State2_Timer = 0; }
+                    else if (GVL.State2_Timer > 300) GVL.Master_SIS_Trip = true; break;
+                case 3: GVL.Inlet_SDV = true; if (GVL.Master_SIS_Trip || GVL.HMI_Stop_Cmd) GVL.Current_State = 4;
+                    else if (GVL.Vessel_Pressure < SYS_DROP_PRESS) { GVL.Current_State = 2; GVL.State2_Timer = 0; } break;
+                case 4: GVL.Inlet_SDV = false; break;
+            }
+            if(GVL.Current_State !== 2) GVL.State2_Timer = 0; 
+
+            // SEC 6: BPCS Regulatory Control Loops
+            if (GVL.Current_State === 3) {
+                // Split-Range Pressure Math
+                if (GVL.Vessel_Pressure <= 45.0) GVL.PCV_Sales_Output = 0.0; else if (GVL.Vessel_Pressure >= 52.0) GVL.PCV_Sales_Output = 100.0; else GVL.PCV_Sales_Output = ((GVL.Vessel_Pressure - 45.0) / 7.0) * 100.0;
+                if (GVL.Vessel_Pressure <= 52.0) GVL.PCV_Flare_Output = 0.0; else if (GVL.Vessel_Pressure >= 55.0) GVL.PCV_Flare_Output = 100.0; else GVL.PCV_Flare_Output = ((GVL.Vessel_Pressure - 52.0) / 3.0) * 100.0;
+                
+                // Bumpless Level Math
+                if (GVL.HMI_LCV_Oil_Manual_Mode) GVL.LCV_Oil_Output = GVL.HMI_LCV_Oil_Manual_Value; else GVL.LCV_Oil_Output = GVL.Total_Liq_Pct;
+                GVL.LCV_Water_Output = GVL.Water_Int_Pct;
+
+                // Anti-Blow-By Clamps
+                if (GVL.Total_Liq_Pct < 5.0) GVL.LCV_Oil_Output = 0.0;
+                if (GVL.Water_Int_Pct < 5.0) GVL.LCV_Water_Output = 0.0;
+            } else {
+                GVL.PCV_Sales_Output = 0.0; 
+                // Flare Blowdown Fix
+                if (GVL.Current_State === 2) GVL.PCV_Flare_Output = 0.0; else GVL.PCV_Flare_Output = 100.0;
+                GVL.LCV_Oil_Output = 0.0; GVL.LCV_Water_Output = 0.0;
+            }
+
+            // Output Boundaries
+            GVL.LCV_Oil_Output = Math.max(0, Math.min(100, GVL.LCV_Oil_Output)); GVL.LCV_Water_Output = Math.max(0, Math.min(100, GVL.LCV_Water_Output));
+
+            // SEC 7: APM Watchdogs
+            if ((GVL.Inlet_SDV && !GVL.Inlet_SDV_ZSO) || (!GVL.Inlet_SDV && !GVL.Inlet_SDV_ZSC)) { GVL.Transit_Timer++; if (GVL.Transit_Timer > 150) GVL.Inlet_Transit_Err = true; } else GVL.Transit_Timer = 0; 
+            if (GVL.Ignore_Count > 0 || GVL.LT_Ignore_Count > 0) { GVL.Shift_MOS_Timer++; if (GVL.Shift_MOS_Timer > 200) GVL.Stale_Bypass_Alarm = true; } else { GVL.Shift_MOS_Timer = 0; GVL.Stale_Bypass_Alarm = false; }
+
+            // ISA-18.2 System Alarming
+            GVL.Global_Alarm = GVL.Master_SIS_Trip || GVL.PT_Matrix_Fault || GVL.LT_Matrix_Fault || GVL.Inlet_Transit_Err || GVL.Stale_Bypass_Alarm;
+
+            GVL.HMI_Reset_Cmd = false; GVL.HMI_Start_Cmd = false; GVL.HMI_Stop_Cmd = false; 
+            
+            updateHMI(); // Push to DOM
+        }, 100);
+
+        // =====================================================================
+        // DOM RENDERING ENGINE (HMI Updates)
+        // =====================================================================
+        // Helper function for visual valve coloring (Red for Shut, Green for Open)
+        const setValveVisual = (element, isOpen) => {
+            if (isOpen) {
+                element.className = element.className.replace(/bg-red-600/g, 'bg-green-600').replace(/border-gray-300/g, 'border-white');
+                if(!element.className.includes('safe-green')) element.className += ' safe-green';
+            } else {
+                element.className = element.className.replace(/bg-green-600/g, 'bg-red-600').replace(/border-white/g, 'border-gray-300').replace(/safe-green/g, '');
+            }
+        };
+
+        function updateHMI() {
+            // Header & States
+            const states = ["0 - ISOLATED", "1 - PURGING", "2 - PRESSURIZING", "3 - RUNNING", "4 - ESD TRIP"];
+            DOM.state.innerText = states[GVL.Current_State];
+            
+            if (GVL.Master_SIS_Trip) DOM.master_trip.className = "px-6 py-3 rounded font-black bg-red-600 text-white border border-red-500 w-64 text-center tracking-[0.15em] text-sm alarm-red uppercase";
+            else DOM.master_trip.className = "px-6 py-3 rounded font-black bg-[#1E2532] text-gray-500 border border-[#2D3748] w-64 text-center tracking-[0.15em] text-sm transition-colors uppercase";
+
+            // Global ISA-18.2 Banner
+            if(GVL.Global_Alarm) DOM.alarm_banner.classList.remove('hidden');
+            else DOM.alarm_banner.classList.add('hidden');
+
+            // Dynamic System Advisor
+            let adv_text = "", adv_color = "";
+            if (GVL.Master_SIS_Trip) {
+                adv_color = "bg-red-900/30 border-red-500/50 text-red-400";
+                if (!GVL.Inlet_SDV_ZSC) adv_text = "FATAL: Close the SDV (Check ZSC limit switch) before Reset is permitted.";
+                else if (GVL.Vessel_Pressure >= SYS_TRIP_PRESS) adv_text = `FATAL: Vessel Pressure >= ${SYS_TRIP_PRESS} Bar. Vent pressure to reset.`;
+                else if (GVL.Total_Liq_Pct >= LIQ_TRIP_HIGH) adv_text = `FATAL: Vessel Level >= ${LIQ_TRIP_HIGH}%. Drain vessel to reset.`;
+                else if (GVL.PT_Matrix_Fault || GVL.LT_Matrix_Fault) adv_text = "FATAL: Matrix Integrity Lost (>1 Sensor Fault). Repair or un-bypass sensors.";
+                else if (GVL.Inlet_Transit_Err) adv_text = "TRIPPED: SDV Transit Watchdog Failed. Verify limits and click Reset.";
+                else adv_text = "TRIPPED: Safe conditions met. Click 'Reset Trip' to clear trip memory.";
+            } else {
+                switch(GVL.Current_State) {
+                    case 0: adv_color = "bg-slate-800 border-slate-600 text-slate-400"; adv_text = "ISOLATED: Ready for ISA-106 Startup sequence. Click 'Start Plant'."; break;
+                    case 1: adv_color = "bg-yellow-900/30 border-yellow-600/50 text-yellow-500"; adv_text = `PURGING: Waiting for pressure to vent. Lower PT sliders <= ${SYS_PURGE_PRESS} Bar.`; break;
+                    case 2: adv_color = "bg-sky-900/30 border-sky-500/50 text-sky-400";
+                        if (!GVL.Inlet_SDV_ZSO) adv_text = "PRESSURIZING: Valve commanded Open. Check 'ZSO' limit switch within 15s!";
+                        else adv_text = `PRESSURIZING: Raise PT sliders >= ${SYS_START_PRESS} Bar within 30s to enter Run State.`; break;
+                    case 3: adv_color = "bg-green-900/30 border-green-500/50 text-green-400"; adv_text = "RUNNING: Steady state control active. Try simulating a fault or MOS bypass."; break;
+                    case 4: adv_color = "bg-red-900/30 border-red-500/50 text-red-400"; adv_text = "EMERGENCY SHUTDOWN: Plant interlocked. Verify conditions and clear trip."; break;
+                }
+            }
+            DOM.advisor.className = `panel h-12 flex items-center justify-center font-black tracking-widest text-[11px] shadow-md transition-colors border-2 shrink-0 uppercase ${adv_color}`;
+            DOM.advisor.innerText = "SYSTEM ADVISOR | " + adv_text;
+
+            // Graphics Engine (Fluid Levels & Tank Text)
+            DOM.val_pres.innerText = GVL.Vessel_Pressure.toFixed(1) + " Bar"; DOM.val_liq.innerText = GVL.Total_Liq_Pct.toFixed(1) + " %"; DOM.val_wat.innerText = GVL.Water_Int_Pct.toFixed(1) + " %";
+            DOM.g_wat.style.height = Math.min(100, GVL.Water_Int_Pct) + "%"; DOM.g_oil.style.height = Math.min(100, GVL.Total_Liq_Pct) + "%";
+
+            // Visual Graphic Valves Update (Red = Shut, Green = Open > 0.0%)
+            setValveVisual(DOM.sdv, GVL.Inlet_SDV);
+            setValveVisual(DOM.pcv_sales, GVL.PCV_Sales_Output > 0.0);
+            setValveVisual(DOM.pcv_flare, GVL.PCV_Flare_Output > 0.0);
+            setValveVisual(DOM.lcv_oil, GVL.LCV_Oil_Output > 0.0);
+            setValveVisual(DOM.lcv_wat, GVL.LCV_Water_Output > 0.0);
+
+            // PID Bar Displays Render
+            DOM.sales_val.innerText = GVL.PCV_Sales_Output.toFixed(1) + "%"; DOM.sales_bar.style.width = GVL.PCV_Sales_Output + "%";
+            DOM.flare_val.innerText = GVL.PCV_Flare_Output.toFixed(1) + "%"; DOM.flare_bar.style.width = GVL.PCV_Flare_Output + "%";
+            DOM.oil_val.innerText = GVL.LCV_Oil_Output.toFixed(1) + "%"; DOM.oil_bar.style.width = GVL.LCV_Oil_Output + "%";
+            DOM.wat_val.innerText = GVL.LCV_Water_Output.toFixed(1) + "%"; DOM.wat_bar.style.width = GVL.LCV_Water_Output + "%";
+
+            // IEC 61511 APM Diagnostics Render
+            let pt_active = 3 - GVL.Ignore_Count; DOM.pt_status.innerText = pt_active + "/3";
+            if (pt_active === 3) { DOM.pt_status.className = "font-black text-green-500 text-xl leading-none"; DOM.pt_degrad.innerText = "2oo3 Active"; }
+            else if (pt_active === 2) { DOM.pt_status.className = "font-black text-yellow-500 text-xl leading-none"; DOM.pt_degrad.innerText = "1oo2 Degraded"; }
+            else { DOM.pt_status.className = "font-black text-red-500 text-xl leading-none"; DOM.pt_degrad.innerText = "Matrix Fault"; }
+
+            let lt_active = 3 - GVL.LT_Ignore_Count; DOM.lt_status.innerText = lt_active + "/3";
+            if (lt_active === 3) { DOM.lt_status.className = "font-black text-green-500 text-xl leading-none"; DOM.lt_degrad.innerText = "2oo3 Active"; }
+            else if (lt_active === 2) { DOM.lt_status.className = "font-black text-yellow-500 text-xl leading-none"; DOM.lt_degrad.innerText = "1oo2 Degraded"; }
+            else { DOM.lt_status.className = "font-black text-red-500 text-xl leading-none"; DOM.lt_degrad.innerText = "Matrix Fault"; }
+
+            if (GVL.Inlet_Transit_Err) { DOM.apm_transit.className = "h-full px-3 rounded border border-gray-600 flex flex-col justify-center items-center flex-1 alarm-red shadow-inner"; DOM.apm_transit.innerHTML = `<span class="text-[9px] text-white font-bold uppercase text-center leading-tight mb-1 tracking-wider">Transit<br>Watchdog</span><span class="font-black text-white text-[10px] tracking-wide">STUCK VALVE</span>`; }
+            else { DOM.apm_transit.className = "h-full px-3 rounded border border-slate-700 flex flex-col justify-center items-center flex-1 bg-slate-800 transition-colors shadow-inner"; DOM.apm_transit.innerHTML = `<span class="text-[9px] text-gray-400 font-bold uppercase text-center leading-tight mb-1 tracking-wider">Transit<br>Watchdog</span><span class="font-black text-gray-500 text-[10px] tracking-wide">NORMAL</span>`; }
+
+            if (GVL.Stale_Bypass_Alarm) { DOM.apm_bypass.className = "h-full px-3 rounded border flex flex-col justify-center items-center flex-1 relative alarm-yellow transition-colors shadow-inner"; DOM.bypass_text.innerText = "> 8 HR AUDIT"; DOM.bypass_text.className = "font-black text-white text-[10px] tracking-wide"; }
+            else { DOM.apm_bypass.className = "h-full px-3 rounded border border-slate-700 flex flex-col justify-center items-center flex-1 bg-slate-800 relative transition-colors shadow-inner"; DOM.bypass_text.innerText = "INACTIVE"; DOM.bypass_text.className = "font-black text-gray-500 text-[10px] tracking-wide"; }
+            
+            if (GVL.Bypass_Veto_Active) DOM.veto_alert.classList.remove('hidden'); else DOM.veto_alert.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
