@@ -11,6 +11,8 @@ This project demonstrates the strict decoupling of the **Basic Process Control S
 A 1:1 JavaScript port of the PLC logic has been deployed alongside an ISA-101 compliant SCADA interface. 
 👉 **[Run the Interactive Factory Acceptance Test (FAT) Here] https://kedharnath-ry.github.io/icss-separator/**
 
+** Video Demonstration link - https://vimeo.com/1204951004?share=copy&fl=sv&fe=ci **
+
 ---
 
 ## 🏛️ International Engineering Standards Applied
