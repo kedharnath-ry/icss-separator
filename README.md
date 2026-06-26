@@ -47,8 +47,8 @@ This architecture strictly adheres to Tier-1 industrial automation standards:
 | File | Description |
 | :--- | :--- |
 | `index.html` | The live SCADA HMI environment. Includes a full JavaScript port of the logic engine, custom vector graphics, and a 6-step interactive FAT Validation Guide. |
-| `PLC_PRG.txt` | The core IEC 61131-3 Structured Text logic engine. Contains NAMUR NE43 validation, boolean voting, ISA-106 states, and regulatory PID control. |
-| `GVL.txt` | The Global Variable List. Defines strictly typed memory allocation, engineering limits, and I/O tags. |
+| `PLC_PRG.st` | The core IEC 61131-3 Structured Text logic engine. Contains NAMUR NE43 validation, boolean voting, ISA-106 states, and regulatory PID control. |
+| `GVL.st` | The Global Variable List. Defines strictly typed memory allocation, engineering limits, and I/O tags. |
 
 ---
 
@@ -56,11 +56,11 @@ This architecture strictly adheres to Tier-1 industrial automation standards:
 To run the native logic engine on a local virtual PLC:
 1. Open **CODESYS V3.5** and create a Standard Project.
 2. Open the **Library Manager**, search for `Util`, and add it to the project (Required for the `PID` function blocks).
-3. Copy the contents of `GVL.txt` into your Global Variable List.
+3. Copy the contents of `GVL.st` into your Global Variable List.
 4. On top of plc_prg add - "PROGRAM PLC_PRG
 VAR
 END_VAR"
-5. Copy the contents of `PLC_PRG.txt` into your main program below the above code..
+5. Copy the contents of `PLC_PRG.st` into your main program below the above code..
 6. Press `F11` to build (0 Errors, 0 Warnings).
 7. Click **Online -> Simulation**, then **Login (Alt+F8)**, and **Start (F5)**. You can now force variables directly in the GVL to test the ISA-106 transitions.
 
